@@ -75,16 +75,22 @@ class WebScraper:
     def _extract_text_content(self, soup: BeautifulSoup) -> tuple[str, str]:
         title_tag = soup.find("title")
         title = title_tag.text.strip() if title_tag else "Untitled"
+        if title_tag:
+            title_tag.decompose()
         for tag in soup(["script", "style", "nav", "header", "footer"]):
             tag.decompose()
         content = self._extract_by_tags(soup, "p")
-        if not content:
-            content = self._extract_by_tags(
-                soup, ["div", "article", "section", "td", "li", "blockquote", "span", "pre"]
+        if len(content.strip()) < 2000:
+            extra = self._extract_by_tags(
+                soup, ["div", "article", "section", "td", "li", "blockquote", "span", "pre", "a"]
             )
-        if not content:
-            content = soup.get_text(separator="\n")
-            content = "\n".join(line.strip() for line in content.splitlines() if line.strip())
+            if extra:
+                content = f"{content}\n{extra}" if content else extra
+        if len(content.strip()) < 3000:
+            raw = soup.get_text(separator="\n")
+            raw = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
+            if len(raw) > len(content) * 1.5:
+                content = raw
         headings = soup.find_all(["h1", "h2", "h3"])
         headings_text = "\n".join(
             f"{h.name.upper()}: {h.get_text().strip()}"
