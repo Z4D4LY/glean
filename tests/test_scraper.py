@@ -431,7 +431,7 @@ def test_scrape_page_without_paragraphs(scraper):
     with patch.object(scraper.session, "get", return_value=fake_response):
         data = scraper.scrape("https://example.com")
     assert data.title == "Only Title"
-    assert data.content == ""
+    assert data.content == "no p tags"
 
 
 def test_extract_links_keeps_query_strings(scraper):

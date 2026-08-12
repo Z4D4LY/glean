@@ -77,10 +77,14 @@ class WebScraper:
         title = title_tag.text.strip() if title_tag else "Untitled"
         for tag in soup(["script", "style", "nav", "header", "footer"]):
             tag.decompose()
-        paragraphs = soup.find_all("p")
-        content = "\n".join(
-            p.get_text().strip() for p in paragraphs if p.get_text().strip()
-        )
+        content = self._extract_by_tags(soup, "p")
+        if not content:
+            content = self._extract_by_tags(
+                soup, ["div", "article", "section", "td", "li", "blockquote", "span", "pre"]
+            )
+        if not content:
+            content = soup.get_text(separator="\n")
+            content = "\n".join(line.strip() for line in content.splitlines() if line.strip())
         headings = soup.find_all(["h1", "h2", "h3"])
         headings_text = "\n".join(
             f"{h.name.upper()}: {h.get_text().strip()}"
@@ -90,6 +94,13 @@ class WebScraper:
         if headings_text:
             content = f"{headings_text}\n\n{content}"
         return title, content
+
+    @staticmethod
+    def _extract_by_tags(soup, tag_names) -> str:
+        tags = soup.find_all(tag_names)
+        return "\n".join(
+            t.get_text().strip() for t in tags if t.get_text().strip()
+        )
 
     def _extract_images(self, soup: BeautifulSoup, base_url: str) -> list[str]:
         images = []
