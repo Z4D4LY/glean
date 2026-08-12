@@ -82,9 +82,14 @@ class BaseMode(ABC):
         deduped = []
         for line in lines:
             clean = line.strip()
-            if clean and clean not in seen:
-                seen.add(clean)
-                deduped.append(clean)
+            if not clean:
+                continue
+            if clean in seen:
+                continue
+            if len(clean) < 20 and not clean.startswith("H"):
+                continue
+            seen.add(clean)
+            deduped.append(clean)
         return "\n".join(deduped)[:max_chars]
 
     def _start_chat(self, data: ScrapedData) -> str | None:
@@ -124,7 +129,12 @@ class BaseMode(ABC):
                 return "exit"
             self.display.show_spinner("AI thinking...")
             messages.append({"role": "user", "content": question})
-            response = self.client.chat_stream(messages)
+            try:
+                response = self.client.chat_stream(messages)
+            except Exception as e:
+                self.display.hide_spinner()
+                self.display.print_box("Error", f"AI request failed: {str(e)}", "red")
+                continue
             messages.append({"role": "assistant", "content": response})
             self.display.print_ai_response(response, "Answer")
 

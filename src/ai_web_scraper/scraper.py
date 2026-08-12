@@ -82,7 +82,18 @@ class WebScraper:
         content = self._extract_by_tags(soup, "p")
         if len(content.strip()) < 2000:
             extra = self._extract_by_tags(
-                soup, ["div", "article", "section", "td", "li", "blockquote", "span", "pre", "a"]
+                soup,
+                [
+                    "div",
+                    "article",
+                    "section",
+                    "td",
+                    "li",
+                    "blockquote",
+                    "span",
+                    "pre",
+                    "a",
+                ],
             )
             if extra:
                 content = f"{content}\n{extra}" if content else extra
@@ -91,7 +102,7 @@ class WebScraper:
             raw = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
             if len(raw) > len(content) * 1.5:
                 content = raw
-        headings = soup.find_all(["h1", "h2", "h3"])
+        headings = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
         headings_text = "\n".join(
             f"{h.name.upper()}: {h.get_text().strip()}"
             for h in headings
@@ -104,9 +115,7 @@ class WebScraper:
     @staticmethod
     def _extract_by_tags(soup, tag_names) -> str:
         tags = soup.find_all(tag_names)
-        return "\n".join(
-            t.get_text().strip() for t in tags if t.get_text().strip()
-        )
+        return "\n".join(t.get_text().strip() for t in tags if t.get_text().strip())
 
     def _extract_images(self, soup: BeautifulSoup, base_url: str) -> list[str]:
         images = []
