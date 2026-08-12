@@ -57,10 +57,9 @@ class BaseMode(ABC):
         content = self._prepare_content(data.content, max_chars=10000)
         messages = [
             {
-                "role": "system",
-                "content": "You are a web content summarizer. Provide a clear and concise summary.",
-            },
-            {"role": "user", "content": f"Summarize this web content:\n\n{content}"},
+                "role": "user",
+                "content": f"Summarize the main points from this text:\n\n{content}",
+            }
         ]
         summary = self.client.chat(messages)
         data.summary = summary
@@ -93,32 +92,32 @@ class BaseMode(ABC):
         return "\n".join(deduped)[:max_chars]
 
     def _start_chat(self, data: ScrapedData) -> str | None:
+        content = self._prepare_content(data.content)
         messages = [
             {
-                "role": "system",
+                "role": "user",
                 "content": (
-                    "You are an assistant answering questions about a scraped web page. "
-                    "The content is already extracted and provided to you below. "
-                    "Answer questions using only this provided text. "
-                    "Do not say you cannot access the page — you already have its full content."
+                    f"I need your help analyzing this text:\n\n"
+                    f"{content}\n\n"
+                    f"Based on this text, what are the main topics covered?"
                 ),
-            }
+            },
         ]
-        content = self._prepare_content(data.content)
-        messages.append(
-            {"role": "user", "content": f"Here is the page content:\n\n{content}"}
-        )
-        messages.append(
-            {
-                "role": "assistant",
-                "content": "I've analyzed the content. Ask me questions!",
-            }
-        )
         self.display.print_box(
             "Chat with Content",
             "Ask questions about the scraped page. Type /back to return",
             "cyan",
         )
+        self.display.show_spinner("AI analyzing content...")
+        try:
+            first_response = self.client.chat(messages)
+        except Exception as e:
+            self.display.hide_spinner()
+            self.display.print_box("Error", f"AI request failed: {str(e)}", "red")
+            self.display.pause()
+            return None
+        messages.append({"role": "assistant", "content": first_response})
+        self.display.print_ai_response(first_response, "Analysis")
         while True:
             question = self.display.prompt("Your question")
             if not question:
