@@ -97,7 +97,7 @@ class WebScraper:
             src = img.get("src") or img.get("data-src")
             if not src:
                 continue
-            src = src.strip()
+            src = str(src).strip()
             if src.startswith("data:"):
                 continue
             if not src.startswith("http"):
@@ -109,7 +109,7 @@ class WebScraper:
     def _extract_links(self, soup: BeautifulSoup, base_url: str) -> list[str]:
         links = []
         for a in soup.find_all("a", href=True):
-            href = a["href"].strip()
+            href = str(a["href"]).strip()
             if not href or href.startswith("#") or href.startswith("javascript:"):
                 continue
             if not href.startswith("http"):
