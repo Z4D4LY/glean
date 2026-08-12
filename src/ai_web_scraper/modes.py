@@ -54,7 +54,7 @@ class BaseMode(ABC):
 
     def _summarize_and_save(self, data: ScrapedData, saved_name: str | None = None):
         self.display.show_spinner("Generating summary...")
-        content = data.content[:10000]
+        content = self._prepare_content(data.content, max_chars=10000)
         messages = [
             {
                 "role": "system",
@@ -76,20 +76,32 @@ class BaseMode(ABC):
                 self.display.print_box("Saved", f"Saved to: {filepath}", "green")
         self.display.pause()
 
+    def _prepare_content(self, content: str, max_chars: int = 15000) -> str:
+        lines = content.splitlines()
+        seen = set()
+        deduped = []
+        for line in lines:
+            clean = line.strip()
+            if clean and clean not in seen:
+                seen.add(clean)
+                deduped.append(clean)
+        return "\n".join(deduped)[:max_chars]
+
     def _start_chat(self, data: ScrapedData) -> str | None:
         messages = [
             {
                 "role": "system",
                 "content": (
-                    f"You are an assistant answering questions about web content. "
-                    f"URL: {data.url}. Title: {data.title}. "
-                    f"Answer based only on the provided content."
+                    "You are an assistant answering questions about a scraped web page. "
+                    "The content is already extracted and provided to you below. "
+                    "Answer questions using only this provided text. "
+                    "Do not say you cannot access the page — you already have its full content."
                 ),
             }
         ]
-        content = data.content[:15000]
+        content = self._prepare_content(data.content)
         messages.append(
-            {"role": "user", "content": f"Here is the content:\n\n{content}"}
+            {"role": "user", "content": f"Here is the page content:\n\n{content}"}
         )
         messages.append(
             {
