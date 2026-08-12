@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![CI](https://github.com/sadali-amine/ai-web-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/sadali-amine/ai-web-scraper/actions/workflows/ci.yml)
+[![CI](https://github.com/Z4D4LY/ai-web-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/Z4D4LY/ai-web-scraper/actions/workflows/ci.yml)
 
 CLI web scraper with AI features — summarization and RAG chat.
 
