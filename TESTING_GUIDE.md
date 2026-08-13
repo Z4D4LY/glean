@@ -1,4 +1,4 @@
-# Manual Testing Guide — AI Web Scraper
+# Manual Testing Guide — Glean
 
 This document describes the complete procedure for manually testing all application features.
 
@@ -8,7 +8,7 @@ This document describes the complete procedure for manually testing all applicat
 
 ```bash
 # Clone the project
-cd ai-web-scraper
+cd glean
 
 # Install in development mode
 pip install -e .[dev]
@@ -26,7 +26,7 @@ API_KEY=ollama
 TEMPERATURE=0.6
 REQUEST_TIMEOUT=30
 MAX_CONTENT_LENGTH=1000000
-SAVE_DIR=~/.ai-web-scraper/scraped
+SAVE_DIR=~/.glean/scraped
 ```
 
 ---
@@ -35,8 +35,8 @@ SAVE_DIR=~/.ai-web-scraper/scraped
 
 | Command | Description | Expected Result |
 |----------|-------------|------------------|
-| `ai-web-scraper` | CLI installed via `pip install -e .` | Main menu displayed |
-| `python -m ai_web_scraper` | Module execution | Main menu displayed |
+| `glean` | CLI installed via `pip install -e .` | Main menu displayed |
+| `python -m glean` | Module execution | Main menu displayed |
 
 **Test**: Launch each command, type `0` → should quit cleanly with "Goodbye".
 
@@ -87,7 +87,7 @@ On startup, the menu displays 4 modes + Quit:
 
 **Verifications**:
 - [ ] HTML content parsed (no raw tags)
-- [ ] JSON file created in `~/.ai-web-scraper/scraped/`
+- [ ] JSON file created in `~/.glean/scraped/`
 - [ ] AI summary coherent (mentions "Perth", "Moby-Dick", "blacksmith")
 
 ---
@@ -168,8 +168,8 @@ At **any prompt**:
 
 1. Scrape (Mode 1) + Save
 2. Quit the app (`0` at main menu)
-3. Relaunch `ai-web-scraper`
-4. Verify the `test_simple.json` file exists in `~/.ai-web-scraper/scraped/`
+3. Relaunch `glean`
+4. Verify the `test_simple.json` file exists in `~/.glean/scraped/`
 
 ---
 
@@ -186,12 +186,12 @@ ruff check .
 
 # 3. Build & install check
 pip install -e .[dev]
-ai-web-scraper --help  # or just launch and quit
+glean --help  # or just launch and quit
 
 # 4. Smoke test (scriptable)
 python -c "
-from ai_web_scraper.app import AIWebScraper
-app = AIWebScraper()
+from glean.app import Glean
+app = Glean()
 assert len(app.modes) == 4
 print('✅ All modes registered')
 "
@@ -215,7 +215,7 @@ print('✅ All modes registered')
 ## 8. Generated Files (Location)
 
 ```
-~/.ai-web-scraper/
+~/.glean/
 ├── scraped/
 │   ├── test_simple.json           # Mode 1 save
 │   ├── test_summary.json          # Mode 2 save
@@ -238,4 +238,4 @@ print('✅ All modes registered')
 
 ---
 
-*Document generated for AI Web Scraper v1.0.0 — Complete manual testing procedure*
+*Document generated for Glean v1.0.0 — Complete manual testing procedure*

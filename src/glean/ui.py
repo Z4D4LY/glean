@@ -3,6 +3,7 @@
 import threading
 import time
 from datetime import datetime
+from types import TracebackType
 
 from rich import box
 from rich.console import Console
@@ -14,39 +15,70 @@ from rich.text import Text
 from .models import ScrapedData
 
 
-class Display:
-    def __init__(self):
-        self.console = Console()
-        self._spinner_stop = threading.Event()
-        self._spinner_thread: threading.Thread | None = None
+class _SpinnerManager:
+    def __init__(self, console: Console):
+        self._console = console
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
 
-    def clear_line(self):
-        self.console.print("\r\033[K", end="")
-
-    def show_spinner(self, text: str = "Processing..."):
-        self._spinner_stop.clear()
+    def start(self, text: str):
+        self.stop()
+        self._stop.clear()
         frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
         def animate():
             i = 0
-            while not self._spinner_stop.is_set():
-                self.console.print(
+            while not self._stop.is_set():
+                self._console.print(
                     f"\r[cyan]{frames[i % len(frames)]} {text}[/cyan]", end=""
                 )
                 i += 1
                 time.sleep(0.1)
 
-        self._spinner_thread = threading.Thread(target=animate, daemon=True)
-        self._spinner_thread.start()
+        self._thread = threading.Thread(target=animate, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        if self._thread is None:
+            return
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=0.5)
+        self._console.print("\r\033[K", end="")
+        self._thread = None
+
+
+class Spinner:
+    def __init__(self, display: "Display", text: str):
+        self._display = display
+        self._text = text
+
+    def __enter__(self):
+        self._display.show_spinner(self._text)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ):
+        self._display.hide_spinner()
+
+
+class Display:
+    def __init__(self):
+        self.console = Console()
+        self._spinner = _SpinnerManager(self.console)
+
+    def show_spinner(self, text: str = "Processing..."):
+        self._spinner.start(text)
 
     def hide_spinner(self):
-        if self._spinner_thread is None:
-            return
-        self._spinner_stop.set()
-        if self._spinner_thread.is_alive():
-            self._spinner_thread.join(timeout=0.5)
-        self.clear_line()
-        self._spinner_thread = None
+        self._spinner.stop()
+
+    def spinner(self, text: str = "Processing..."):
+        return Spinner(self, text)
 
     def print_box(self, title: str, content: str = "", style: str = "cyan"):
         if content:
@@ -65,11 +97,7 @@ class Display:
         table.add_column(style="white")
         table.add_column(style="dim cyan")
         for key, desc, detail in items:
-            table.add_row(
-                f"[bold yellow]{key}[/bold yellow]",
-                f"[white]{desc}[/white]",
-                f"[dim cyan]{detail}[/dim cyan]",
-            )
+            table.add_row(key, desc, detail)
         self.console.print(
             Panel(table, title=title, border_style=style, box=box.ROUNDED)
         )

@@ -1,4 +1,4 @@
-"""Data models for the AI Web Scraper."""
+"""Data models for the Glean."""
 
 import time
 from dataclasses import dataclass, field

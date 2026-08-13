@@ -4,13 +4,13 @@ import sys
 
 from dotenv import load_dotenv
 
-from .app import AIWebScraper
+from .app import Glean
 
 
 def main():
     load_dotenv()
     try:
-        app = AIWebScraper()
+        app = Glean()
         app.run()
     except KeyboardInterrupt:
         print("\n\nGoodbye!")

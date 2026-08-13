@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for ai-web-scraper.
+"""Unit tests for glean.
 
 These tests run fully offline: the network layer and the LLM client are
 mocked, so no live HTTP request or API call is ever made.
@@ -11,11 +11,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_web_scraper.client import AIWebClient
-from ai_web_scraper.models import MODES, ScrapedData
-from ai_web_scraper.scraper import WebScraper
-from ai_web_scraper.storage import StorageManager
-from ai_web_scraper.ui import Display
+from glean.client import WebClient
+from glean.models import MODES, ScrapedData
+from glean.scraper import WebScraper
+from glean.storage import StorageManager
+from glean.ui import Display
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -68,7 +68,7 @@ def scraper() -> WebScraper:
 
 @pytest.fixture
 def temp_storage(tmp_path) -> StorageManager:
-    with patch("ai_web_scraper.storage.get_save_dir", return_value=tmp_path):
+    with patch("glean.storage.get_save_dir", return_value=tmp_path):
         storage = StorageManager()
         storage.save_dir = tmp_path
         yield storage
@@ -166,7 +166,7 @@ def test_scrape_respects_max_content_length(scraper):
 
     with (
         patch(
-            "ai_web_scraper.scraper.load_settings",
+            "glean.scraper.load_settings",
             return_value={"request_timeout": 30, "max_content_length": 100},
         ),
         patch.object(scraper.session, "get", return_value=fake_response),
@@ -183,7 +183,7 @@ def test_scrape_propagates_request_errors(scraper):
         patch.object(
             scraper.session, "get", side_effect=requests.RequestException("boom")
         ),
-        pytest.raises(Exception, match="Scraping error"),
+        pytest.raises(Exception, match="boom"),
     ):
         scraper.scrape("https://example.com")
 
@@ -219,7 +219,7 @@ def test_storage_load_missing_returns_none(temp_storage):
 
 
 # ---------------------------------------------------------------------------
-# AIWebClient (mocked LLM)
+# WebClient (mocked LLM)
 # ---------------------------------------------------------------------------
 
 
@@ -229,8 +229,8 @@ def test_ai_client_chat_returns_content():
     fake_client = MagicMock()
     fake_client.chat.completions.create.return_value = fake_completion
 
-    with patch("ai_web_scraper.client.OpenAI", return_value=fake_client):
-        client = AIWebClient()
+    with patch("glean.client.OpenAI", return_value=fake_client):
+        client = WebClient()
         out = client.chat([{"role": "user", "content": "hello"}])
 
     assert out == "hi there"
@@ -247,8 +247,8 @@ def test_ai_client_chat_stream_concatenates_chunks():
     fake_client = MagicMock()
     fake_client.chat.completions.create.side_effect = fake_stream
 
-    with patch("ai_web_scraper.client.OpenAI", return_value=fake_client):
-        client = AIWebClient()
+    with patch("glean.client.OpenAI", return_value=fake_client):
+        client = WebClient()
         out = client.chat_stream([{"role": "user", "content": "hi"}])
 
     assert out == "Bonjour !"
@@ -313,7 +313,7 @@ def test_scrape_invalid_url_raises(scraper):
             "get",
             side_effect=requests.exceptions.MissingSchema("Invalid URL"),
         ),
-        pytest.raises(Exception, match="Scraping error"),
+        pytest.raises(Exception, match="Invalid URL"),
     ):
         scraper.scrape("not-a-valid-url")
 
@@ -337,13 +337,13 @@ def test_scrape_http_error_raises(scraper):
             "get",
             side_effect=requests.exceptions.HTTPError("404"),
         ),
-        pytest.raises(Exception, match="Scraping error"),
+        pytest.raises(Exception, match="404"),
     ):
         scraper.scrape("https://example.com/missing")
 
 
 # ---------------------------------------------------------------------------
-# AIWebClient error handling (mocked LLM)
+# WebClient error handling (mocked LLM)
 # ---------------------------------------------------------------------------
 
 
@@ -351,9 +351,9 @@ def test_ai_client_chat_raises_on_api_error():
     fake_client = MagicMock()
     fake_client.chat.completions.create.side_effect = RuntimeError("connection refused")
 
-    with patch("ai_web_scraper.client.OpenAI", return_value=fake_client):
-        client = AIWebClient()
-        with pytest.raises(Exception, match="AI client error"):
+    with patch("glean.client.OpenAI", return_value=fake_client):
+        client = WebClient()
+        with pytest.raises(Exception, match="connection refused"):
             client.chat([{"role": "user", "content": "hi"}])
 
 
@@ -361,9 +361,9 @@ def test_ai_client_chat_stream_raises_on_api_error():
     fake_client = MagicMock()
     fake_client.chat.completions.create.side_effect = RuntimeError("boom")
 
-    with patch("ai_web_scraper.client.OpenAI", return_value=fake_client):
-        client = AIWebClient()
-        with pytest.raises(Exception, match="AI client error"):
+    with patch("glean.client.OpenAI", return_value=fake_client):
+        client = WebClient()
+        with pytest.raises(Exception, match="boom"):
             client.chat_stream([{"role": "user", "content": "hi"}])
 
 
@@ -373,8 +373,8 @@ def test_ai_client_chat_never_returns_none():
     fake_client = MagicMock()
     fake_client.chat.completions.create.return_value = fake_completion
 
-    with patch("ai_web_scraper.client.OpenAI", return_value=fake_client):
-        client = AIWebClient()
+    with patch("glean.client.OpenAI", return_value=fake_client):
+        client = WebClient()
         assert client.chat([{"role": "user", "content": "hi"}]) == ""
 
 
@@ -452,7 +452,7 @@ def test_extract_links_keeps_query_strings(scraper):
 def test_display_confirm_falls_back_to_input_on_rich_failure():
     display = Display.__new__(Display)
 
-    with patch("ai_web_scraper.ui.Confirm.ask", side_effect=Exception("no TTY")):
+    with patch("glean.ui.Confirm.ask", side_effect=Exception("no TTY")):
         with patch("builtins.input", return_value="y"):
             assert display.confirm("Continue?") is True
         with patch("builtins.input", return_value="n"):
@@ -464,7 +464,7 @@ def test_display_confirm_falls_back_to_input_on_rich_failure():
 def test_display_prompt_falls_back_to_input_on_rich_failure():
     display = Display.__new__(Display)
 
-    with patch("ai_web_scraper.ui.Prompt.ask", side_effect=Exception("no TTY")):
+    with patch("glean.ui.Prompt.ask", side_effect=Exception("no TTY")):
         with patch("builtins.input", return_value="  hello  "):
             assert display.prompt("URL?") == "hello"
         with patch("builtins.input", side_effect=EOFError):

@@ -8,7 +8,26 @@ import requests
 from bs4 import BeautifulSoup
 
 from .config import load_settings
+from .exceptions import ScraperError
 from .models import ScrapedData
+
+_TAG_THRESHOLD = 2000
+_TEXT_THRESHOLD = 3000
+_GETTEXT_RATIO = 1.5
+_MAX_IMAGES = 20
+_MAX_LINKS = 50
+_TAG_FALLBACK = [
+    "div",
+    "article",
+    "section",
+    "td",
+    "li",
+    "blockquote",
+    "span",
+    "pre",
+    "a",
+]
+_HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
 
 
 class WebScraper:
@@ -29,33 +48,32 @@ class WebScraper:
         try:
             response = self.session.get(url, timeout=settings["request_timeout"])
             response.raise_for_status()
-
             html = response.text or ""
-            if len(html) > settings["max_content_length"]:
-                html = html[: settings["max_content_length"]]
-
-            soup = BeautifulSoup(html, "html.parser")
-            metadata = self._extract_metadata(soup)
-            title, content = self._extract_text_content(soup)
-
-            images = self._extract_images(soup, url)
-            links = self._extract_links(soup, url)
-
-            return ScrapedData(
-                url=url,
-                title=title,
-                content=content,
-                images=images,
-                links=links,
-                metadata=metadata,
-                scraped_at=time.time(),
-            )
-
         except requests.RequestException as e:
-            raise Exception(f"Scraping error: {str(e)}") from e
+            raise ScraperError(str(e)) from e
+
+        if len(html) > settings["max_content_length"]:
+            html = html[: settings["max_content_length"]]
+
+        soup = BeautifulSoup(html, "html.parser")
+        metadata = self._extract_metadata(soup)
+        title, content = self._extract_text_content(soup)
+
+        images = self._extract_images(soup, url)
+        links = self._extract_links(soup, url)
+
+        return ScrapedData(
+            url=url,
+            title=title,
+            content=content,
+            images=images,
+            links=links,
+            metadata=metadata,
+            scraped_at=time.time(),
+        )
 
     def _extract_metadata(self, soup: BeautifulSoup) -> dict[str, Any]:
-        metadata = {}
+        metadata: dict[str, Any] = {}
         for tag in ["description", "keywords", "author", "robots"]:
             meta = soup.find("meta", attrs={"name": tag})
             if meta and meta.get("content"):
@@ -80,29 +98,16 @@ class WebScraper:
         for tag in soup(["script", "style", "nav", "header", "footer"]):
             tag.decompose()
         content = self._extract_by_tags(soup, "p")
-        if len(content.strip()) < 2000:
-            extra = self._extract_by_tags(
-                soup,
-                [
-                    "div",
-                    "article",
-                    "section",
-                    "td",
-                    "li",
-                    "blockquote",
-                    "span",
-                    "pre",
-                    "a",
-                ],
-            )
+        if len(content.strip()) < _TAG_THRESHOLD:
+            extra = self._extract_by_tags(soup, _TAG_FALLBACK)
             if extra:
                 content = f"{content}\n{extra}" if content else extra
-        if len(content.strip()) < 3000:
+        if len(content.strip()) < _TEXT_THRESHOLD:
             raw = soup.get_text(separator="\n")
             raw = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
-            if len(raw) > len(content) * 1.5:
+            if len(raw) > len(content) * _GETTEXT_RATIO:
                 content = raw
-        headings = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
+        headings = soup.find_all(_HEADING_TAGS)
         headings_text = "\n".join(
             f"{h.name.upper()}: {h.get_text().strip()}"
             for h in headings
@@ -113,12 +118,12 @@ class WebScraper:
         return title, content
 
     @staticmethod
-    def _extract_by_tags(soup, tag_names) -> str:
+    def _extract_by_tags(soup: BeautifulSoup, tag_names: str | list[str]) -> str:
         tags = soup.find_all(tag_names)
         return "\n".join(t.get_text().strip() for t in tags if t.get_text().strip())
 
     def _extract_images(self, soup: BeautifulSoup, base_url: str) -> list[str]:
-        images = []
+        images: list[str] = []
         for img in soup.find_all("img"):
             src = img.get("src") or img.get("data-src")
             if not src:
@@ -130,10 +135,10 @@ class WebScraper:
                 src = urljoin(base_url, src)
             if src not in images:
                 images.append(src)
-        return images[:20]
+        return images[:_MAX_IMAGES]
 
     def _extract_links(self, soup: BeautifulSoup, base_url: str) -> list[str]:
-        links = []
+        links: list[str] = []
         for a in soup.find_all("a", href=True):
             href = str(a["href"]).strip()
             if not href or href.startswith("#") or href.startswith("javascript:"):
@@ -142,4 +147,4 @@ class WebScraper:
                 href = urljoin(base_url, href)
             if href not in links:
                 links.append(href)
-        return links[:50]
+        return links[:_MAX_LINKS]

@@ -1,18 +1,18 @@
 """OpenAI-compatible AI client for summarization and chat."""
 
-import os
-
 from openai import OpenAI
 
 from .config import load_config
+from .exceptions import ClientError
 
 
-class AIWebClient:
+class WebClient:
     def __init__(self):
         cfg = load_config()
-        timeout = float(os.getenv("API_TIMEOUT", "60"))
         self.client = OpenAI(
-            base_url=cfg["base_url"], api_key=cfg["api_key"], timeout=timeout
+            base_url=cfg["base_url"],
+            api_key=cfg["api_key"],
+            timeout=cfg["api_timeout"],
         )
         self.model = cfg["model"]
         self.temperature = cfg["temperature"]
@@ -27,7 +27,7 @@ class AIWebClient:
             )
             content = response.choices[0].message.content
         except Exception as e:
-            raise Exception(f"AI client error: {str(e)}") from e
+            raise ClientError(str(e)) from e
         return content or ""
 
     def chat_stream(self, messages: list[dict]) -> str:
@@ -39,9 +39,9 @@ class AIWebClient:
                 temperature=self.temperature,
             )
         except Exception as e:
-            raise Exception(f"AI client error: {str(e)}") from e
-        full_response = ""
+            raise ClientError(str(e)) from e
+        parts: list[str] = []
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
-                full_response += chunk.choices[0].delta.content
-        return full_response
+                parts.append(chunk.choices[0].delta.content)
+        return "".join(parts)

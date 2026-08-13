@@ -1,19 +1,23 @@
-"""Interactive mode classes for the AI Web Scraper CLI."""
+"""Interactive mode classes for the Glean CLI."""
 
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from .client import AIWebClient
+from .client import WebClient
+from .exceptions import ClientError, ScraperError
 from .models import ScrapedData
 from .scraper import WebScraper
 from .storage import StorageManager
 from .ui import Display
 
+_SUMMARY_MAX_CHARS = 10000
+_CHAT_MAX_CHARS = 15000
+
 
 class BaseMode(ABC):
     def __init__(
         self,
-        client: AIWebClient,
+        client: WebClient,
         scraper: WebScraper,
         storage: StorageManager,
         display: Display,
@@ -27,22 +31,18 @@ class BaseMode(ABC):
     def run(self) -> str | None:
         pass
 
-    @abstractmethod
-    def get_help(self) -> str:
-        pass
-
     def _scrape_and_show(self, url: str) -> ScrapedData | None:
         self.display.show_spinner("Scraping...")
         try:
             data = self.scraper.scrape(url)
+        except (ScraperError, Exception) as e:
             self.display.hide_spinner()
-            self.display.print_scraped_data(data, preview=True)
-            return data
-        except Exception as e:
-            self.display.hide_spinner()
-            self.display.print_box("Error", f"Scraping failed: {str(e)}", "red")
+            self.display.print_box("Error", str(e), "red")
             self.display.pause()
             return None
+        self.display.hide_spinner()
+        self.display.print_scraped_data(data, preview=True)
+        return data
 
     def _save_prompt(self, data: ScrapedData) -> str | None:
         if self.display.confirm("\nSave result?"):
@@ -54,14 +54,20 @@ class BaseMode(ABC):
 
     def _summarize_and_save(self, data: ScrapedData, saved_name: str | None = None):
         self.display.show_spinner("Generating summary...")
-        content = self._prepare_content(data.content, max_chars=10000)
+        content = self._prepare_content(data.content, max_chars=_SUMMARY_MAX_CHARS)
         messages = [
             {
                 "role": "user",
                 "content": f"Summarize the main points from this text:\n\n{content}",
             }
         ]
-        summary = self.client.chat(messages)
+        try:
+            summary = self.client.chat(messages)
+        except ClientError as e:
+            self.display.hide_spinner()
+            self.display.print_box("Error", str(e), "red")
+            self.display.pause()
+            return
         data.summary = summary
         self.display.print_ai_response(summary, "AI Summary")
         if saved_name:
@@ -75,15 +81,13 @@ class BaseMode(ABC):
                 self.display.print_box("Saved", f"Saved to: {filepath}", "green")
         self.display.pause()
 
-    def _prepare_content(self, content: str, max_chars: int = 15000) -> str:
+    def _prepare_content(self, content: str, max_chars: int) -> str:
         lines = content.splitlines()
-        seen = set()
-        deduped = []
+        seen: set[str] = set()
+        deduped: list[str] = []
         for line in lines:
             clean = line.strip()
-            if not clean:
-                continue
-            if clean in seen:
+            if not clean or clean in seen:
                 continue
             if len(clean) < 20 and not clean.startswith("H"):
                 continue
@@ -92,8 +96,8 @@ class BaseMode(ABC):
         return "\n".join(deduped)[:max_chars]
 
     def _start_chat(self, data: ScrapedData) -> str | None:
-        content = self._prepare_content(data.content)
-        messages = [
+        content = self._prepare_content(data.content, max_chars=_CHAT_MAX_CHARS)
+        messages: list[dict] = [
             {
                 "role": "user",
                 "content": (
@@ -111,9 +115,9 @@ class BaseMode(ABC):
         self.display.show_spinner("AI analyzing content...")
         try:
             first_response = self.client.chat(messages)
-        except Exception as e:
+        except ClientError as e:
             self.display.hide_spinner()
-            self.display.print_box("Error", f"AI request failed: {str(e)}", "red")
+            self.display.print_box("Error", str(e), "red")
             self.display.pause()
             return None
         messages.append({"role": "assistant", "content": first_response})
@@ -130,9 +134,9 @@ class BaseMode(ABC):
             messages.append({"role": "user", "content": question})
             try:
                 response = self.client.chat_stream(messages)
-            except Exception as e:
+            except ClientError as e:
                 self.display.hide_spinner()
-                self.display.print_box("Error", f"AI request failed: {str(e)}", "red")
+                self.display.print_box("Error", str(e), "red")
                 continue
             messages.append({"role": "assistant", "content": response})
             self.display.print_ai_response(response, "Answer")
@@ -168,9 +172,6 @@ class ScrapeMode(BaseMode):
             return self._start_chat(data)
         return None
 
-    def get_help(self) -> str:
-        return "Simple URL scraping.\n\nCommands:\n  /help  - This help\n  /exit  - Quit\n  /clear - Clear screen"
-
 
 class SummarizeMode(BaseMode):
     def run(self) -> str | None:
@@ -183,9 +184,6 @@ class SummarizeMode(BaseMode):
         self._summarize_and_save(data)
         return None
 
-    def get_help(self) -> str:
-        return "Automatic page summary.\n\nCommands:\n  /help  - This help\n  /exit  - Quit"
-
 
 class ChatMode(BaseMode):
     def run(self) -> str | None:
@@ -196,9 +194,6 @@ class ChatMode(BaseMode):
         if not data:
             return None
         return self._start_chat(data)
-
-    def get_help(self) -> str:
-        return "Conversation with scraped content (RAG).\n\nCommands:\n  /back  - Back to menu\n  /exit  - Quit\n  /help  - This help"
 
 
 class ConfigMode(BaseMode):
@@ -230,6 +225,3 @@ class ConfigMode(BaseMode):
             )
         self.display.pause()
         return None
-
-    def get_help(self) -> str:
-        return "View and modify configuration.\n\nCommands:\n  /help  - This help\n  /exit  - Quit"

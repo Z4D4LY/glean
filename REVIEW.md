@@ -1,4 +1,4 @@
-# AI Web Scraper — Code Review
+# Glean — Code Review
 
 > Date: 2026-08-01
 > Scope: Full audit of the refactored codebase (post `src/` layout, tests, CI)
@@ -48,10 +48,10 @@ all present. Genuinely above average for a recruit repo.
 
 ```python
 def get_save_dir() -> Path:
-    return Path(os.getenv("SAVE_DIR", str(Path.home() / ".ai-web-scraper" / "scraped")))
+    return Path(os.getenv("SAVE_DIR", str(Path.home() / ".glean" / "scraped")))
 ```
 
-The documented default in `.env.example` is `SAVE_DIR=~/.ai-web-scraper/scraped`.
+The documented default in `.env.example` is `SAVE_DIR=~/.glean/scraped`.
 `Path()` does **not** expand `~`, so this creates a literal `~/...` directory
 relative to CWD. Verified:
 

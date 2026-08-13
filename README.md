@@ -1,8 +1,8 @@
-# AI Web Scraper
+# Glean
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![CI](https://github.com/Z4D4LY/ai-web-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/Z4D4LY/ai-web-scraper/actions/workflows/ci.yml)
+[![CI](https://github.com/Z4D4LY/glean/actions/workflows/ci.yml/badge.svg)](https://github.com/Z4D4LY/glean/actions/workflows/ci.yml)
 
 CLI web scraper with AI features — summarization and RAG chat.
 
@@ -26,13 +26,13 @@ pip install -e .
 ## Usage
 
 ```bash
-ai-web-scraper
+glean
 ```
 
 Or via module:
 
 ```bash
-python -m ai_web_scraper
+python -m glean
 ```
 
 ## Configuration
@@ -67,9 +67,9 @@ All 24 tests run fully offline (network and LLM are mocked).
 ## Project Structure
 
 ```
-ai-web-scraper/
+glean/
 ├── src/
-│   └── ai_web_scraper/
+│   └── glean/
 │       ├── __init__.py
 │       ├── __main__.py         # Module entry point
 │       ├── app.py              # Application controller

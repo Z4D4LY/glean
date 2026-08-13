@@ -9,11 +9,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_web_scraper.app import AIWebScraper
-from ai_web_scraper.client import AIWebClient
-from ai_web_scraper.modes import ConfigMode
-from ai_web_scraper.scraper import WebScraper
-from ai_web_scraper.storage import StorageManager
+from glean.app import Glean
+from glean.client import WebClient
+from glean.modes import ConfigMode
+from glean.scraper import WebScraper
+from glean.storage import StorageManager
 
 
 class FakeDisplay:
@@ -57,7 +57,7 @@ class FakeDisplay:
 
 @pytest.fixture
 def temp_storage(tmp_path):
-    with patch("ai_web_scraper.storage.get_save_dir", return_value=tmp_path):
+    with patch("glean.storage.get_save_dir", return_value=tmp_path):
         storage = StorageManager()
         storage.save_dir = tmp_path
         yield storage
@@ -71,7 +71,7 @@ def temp_storage(tmp_path):
 def test_config_mode_runs(temp_storage):
     display = FakeDisplay()
     mode = ConfigMode(
-        client=MagicMock(spec=AIWebClient),
+        client=MagicMock(spec=WebClient),
         scraper=MagicMock(spec=WebScraper),
         storage=temp_storage,
         display=display,
@@ -83,16 +83,16 @@ def test_config_mode_runs(temp_storage):
 
 
 # ---------------------------------------------------------------------------
-# AIWebScraper wiring
+# Glean wiring
 # ---------------------------------------------------------------------------
 
 
 def test_app_builds_all_modes():
     with (
-        patch("ai_web_scraper.storage.get_save_dir", return_value=Path("/tmp")),
-        patch("ai_web_scraper.app.Display"),
+        patch("glean.storage.get_save_dir", return_value=Path("/tmp")),
+        patch("glean.app.Display"),
     ):
-        app = AIWebScraper()
+        app = Glean()
     assert set(app.modes.keys()) == {
         "scrape",
         "summarize",
@@ -104,11 +104,11 @@ def test_app_builds_all_modes():
 def test_main_menu_invalid_choice_does_not_crash():
     display = FakeDisplay(prompts=["99"])
     with (
-        patch("ai_web_scraper.storage.get_save_dir", return_value=Path("/tmp")),
-        patch("ai_web_scraper.app.Display", return_value=display),
+        patch("glean.storage.get_save_dir", return_value=Path("/tmp")),
+        patch("glean.app.Display", return_value=display),
         patch("builtins.input", return_value=""),
     ):
-        app = AIWebScraper()
+        app = Glean()
         app._main_menu()
     texts = [f"{b[0]} {b[1]}" for b in display.boxes]
     assert any("invalid" in t.lower() for t in texts)
@@ -117,10 +117,10 @@ def test_main_menu_invalid_choice_does_not_crash():
 def test_main_menu_exit_stops_app():
     display = FakeDisplay(prompts=["0"])
     with (
-        patch("ai_web_scraper.storage.get_save_dir", return_value=Path("/tmp")),
-        patch("ai_web_scraper.app.Display", return_value=display),
+        patch("glean.storage.get_save_dir", return_value=Path("/tmp")),
+        patch("glean.app.Display", return_value=display),
         patch("builtins.input", return_value=""),
     ):
-        app = AIWebScraper()
+        app = Glean()
         app._main_menu()
     assert app.running is False
