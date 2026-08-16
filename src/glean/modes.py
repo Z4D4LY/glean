@@ -89,7 +89,7 @@ class BaseMode(ABC):
             clean = line.strip()
             if not clean or clean in seen:
                 continue
-            if len(clean) < 20 and not clean.startswith("H"):
+            if len(clean) < 20 and not clean.startswith(("#", "-", "*", ">")):
                 continue
             seen.add(clean)
             deduped.append(clean)

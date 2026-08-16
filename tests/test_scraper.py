@@ -92,17 +92,18 @@ def test_extract_metadata(scraper, html_sample):
     assert meta["language"] == "en"
 
 
-def test_extract_text_content_strips_nav_and_footer(scraper, html_sample):
+def test_extract_markdown_strips_nav_and_footer(scraper, html_sample):
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html_sample, "html.parser")
-    title, content = scraper._extract_text_content(soup)
-    assert title == "Test Page"
+    scraper._remove_noise(soup)
+    content = scraper._extract_markdown(soup)
     assert "First paragraph of real content." in content
     assert "Second paragraph" in content
     assert "Nav link" not in content
     assert "Footer text" not in content
-    assert "Sub Heading" in content
+    assert "Main Heading" not in content
+    assert "## Sub Heading" in content
 
 
 def test_extract_images_resolves_relative_and_data_src(scraper, html_sample):
@@ -135,6 +136,74 @@ def test_extract_images_limited_to_20():
     soup = BeautifulSoup(f"<html><body>{imgs}</body></html>", "html.parser")
     result = scraper._extract_images(soup, "https://x.com")
     assert len(result) == 20
+
+
+def test_remove_noise_strips_class_based_junk(scraper):
+    from bs4 import BeautifulSoup
+
+    html = (
+        "<html><body>"
+        '<div class="cookie-banner">Cookie notice</div>'
+        '<div class="navbar">Menu</div>'
+        "<aside>Sidebar text</aside>"
+        "<form><button>Submit</button></form>"
+        "<p>Real content</p>"
+        "</body></html>"
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    scraper._remove_noise(soup)
+    content = scraper._extract_markdown(soup)
+    assert "Cookie notice" not in content
+    assert "Menu" not in content
+    assert "Sidebar text" not in content
+    assert "Submit" not in content
+    assert "Real content" in content
+
+
+def test_extract_markdown_converts_headings_and_lists(scraper):
+    from bs4 import BeautifulSoup
+
+    html = "<html><body><h1>Title</h1><ul><li>one</li><li>two</li></ul></body></html>"
+    soup = BeautifulSoup(html, "html.parser")
+    content = scraper._extract_markdown(soup)
+    assert "# Title" in content
+    assert "- one" in content
+    assert "- two" in content
+
+
+def test_extract_markdown_strips_image_and_junk_links(scraper):
+    from bs4 import BeautifulSoup
+
+    html = (
+        "<html><body>"
+        '<img src="https://x.com/a.png" alt="pic">'
+        '<a href="#anchor">Skip</a>'
+        '<a href="javascript:void(0)">Noop</a>'
+        '<a href="https://x.com/real">Real</a>'
+        "</body></html>"
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    content = scraper._extract_markdown(soup)
+    assert "![pic]" not in content
+    assert "(#anchor)" not in content
+    assert "javascript:" not in content
+    assert "[Real](https://x.com/real)" in content
+
+
+def test_extract_markdown_strips_empty_links_and_title_attr(scraper):
+    from bs4 import BeautifulSoup
+
+    html = (
+        "<html><body>"
+        '<a href="/img"><img src="/i.png" alt=""></a>'
+        '<a href="/go" title="go">Go</a>'
+        "</body></html>"
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    content = scraper._extract_markdown(soup)
+    assert "[](/img)" not in content
+    assert '[Go](/go "go")' not in content
+    assert "[Go](/go)" in content
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +347,14 @@ def test_storage_save_prevents_path_traversal(temp_storage):
     data = ScrapedData(url="u", title="t", content="c")
     path = temp_storage.save(data, "../../evil.json")
     assert Path(path).parent == temp_storage.save_dir
-    assert Path(path).name == "evil.json"
+    assert "/" not in Path(path).name
+    assert "\\" not in Path(path).name
+
+
+def test_storage_save_sanitizes_slashes_in_filename(temp_storage):
+    data = ScrapedData(url="u", title="t", content="c")
+    path = temp_storage.save(data, "lemonde.fr-16/08")
+    assert Path(path).name == "lemonde.fr-16-08.json"
 
 
 def test_storage_load_tolerates_missing_keys(temp_storage):

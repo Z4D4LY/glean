@@ -1,33 +1,61 @@
 """Web scraper using requests and BeautifulSoup."""
 
+import re
 import time
 from typing import Any
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from ftfy import fix_text
+from markdownify import markdownify as markdownify_html
 
 from .config import load_settings
 from .exceptions import ScraperError
 from .models import ScrapedData
 
-_TAG_THRESHOLD = 2000
-_TEXT_THRESHOLD = 3000
-_GETTEXT_RATIO = 1.5
 _MAX_IMAGES = 20
 _MAX_LINKS = 50
-_TAG_FALLBACK = [
-    "div",
-    "article",
-    "section",
-    "td",
-    "li",
-    "blockquote",
-    "span",
-    "pre",
-    "a",
+_NOISE_TAGS = [
+    "script",
+    "style",
+    "noscript",
+    "svg",
+    "iframe",
+    "nav",
+    "header",
+    "footer",
+    "aside",
+    "form",
+    "button",
 ]
-_HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
+_NOISE_WORDS = [
+    "cookie",
+    "popup",
+    "modal",
+    "navbar",
+    "menu",
+    "footer",
+    "header",
+    "subscribe",
+    "newsletter",
+    "signup",
+    "login",
+    "loading",
+    "advert",
+    "sponsored",
+    "sidebar",
+    "breadcrumb",
+    "pagination",
+    "floating",
+    "cursor",
+    "w-nav",
+    "w-form",
+    "skip",
+    "sr-only",
+    "screen-reader",
+    "visually-hidden",
+]
 
 
 class WebScraper:
@@ -55,12 +83,16 @@ class WebScraper:
         if len(html) > settings["max_content_length"]:
             html = html[: settings["max_content_length"]]
 
+        html = fix_text(html)
+
         soup = BeautifulSoup(html, "html.parser")
         metadata = self._extract_metadata(soup)
-        title, content = self._extract_text_content(soup)
-
+        title = self._extract_title(soup)
         images = self._extract_images(soup, url)
         links = self._extract_links(soup, url)
+
+        self._remove_noise(soup)
+        content = self._extract_markdown(soup)
 
         return ScrapedData(
             url=url,
@@ -90,37 +122,40 @@ class WebScraper:
             metadata["language"] = html_tag["lang"]
         return metadata
 
-    def _extract_text_content(self, soup: BeautifulSoup) -> tuple[str, str]:
+    def _extract_title(self, soup: BeautifulSoup) -> str:
         title_tag = soup.find("title")
-        title = title_tag.text.strip() if title_tag else "Untitled"
-        if title_tag:
-            title_tag.decompose()
-        for tag in soup(["script", "style", "nav", "header", "footer"]):
-            tag.decompose()
-        content = self._extract_by_tags(soup, "p")
-        if len(content.strip()) < _TAG_THRESHOLD:
-            extra = self._extract_by_tags(soup, _TAG_FALLBACK)
-            if extra:
-                content = f"{content}\n{extra}" if content else extra
-        if len(content.strip()) < _TEXT_THRESHOLD:
-            raw = soup.get_text(separator="\n")
-            raw = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
-            if len(raw) > len(content) * _GETTEXT_RATIO:
-                content = raw
-        headings = soup.find_all(_HEADING_TAGS)
-        headings_text = "\n".join(
-            f"{h.name.upper()}: {h.get_text().strip()}"
-            for h in headings
-            if h.get_text().strip()
-        )
-        if headings_text:
-            content = f"{headings_text}\n\n{content}"
-        return title, content
+        return title_tag.text.strip() if title_tag else "Untitled"
 
-    @staticmethod
-    def _extract_by_tags(soup: BeautifulSoup, tag_names: str | list[str]) -> str:
-        tags = soup.find_all(tag_names)
-        return "\n".join(t.get_text().strip() for t in tags if t.get_text().strip())
+    def _remove_noise(self, soup: BeautifulSoup) -> None:
+        for tag in soup(_NOISE_TAGS):
+            tag.decompose()
+        tags_to_remove: list[Any] = []
+        for tag in soup.find_all(True):
+            class_value = tag.get("class")
+            id_value = tag.get("id") or ""
+            if isinstance(class_value, list):
+                class_text = " ".join(class_value).lower()
+            elif class_value:
+                class_text = str(class_value).lower()
+            else:
+                class_text = ""
+            combined = f"{class_text} {str(id_value).lower()}"
+            if any(word in combined for word in _NOISE_WORDS):
+                tags_to_remove.append(tag)
+        for tag in tags_to_remove:
+            tag.decompose()
+
+    def _extract_markdown(self, soup: BeautifulSoup) -> str:
+        body = soup.body if soup.body else soup
+        markdown_text = markdownify_html(str(body), heading_style="ATX", bullets="-")
+        markdown_text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", markdown_text)
+        markdown_text = re.sub(r"\[\]\([^)]*\)", "", markdown_text)
+        markdown_text = re.sub(
+            r"\[([^\]]*)\]\((?:#|javascript:)[^)]*\)", r"\1", markdown_text
+        )
+        markdown_text = re.sub(r' "(?:[^"\\]|\\.)*"\)', ")", markdown_text)
+        markdown_text = re.sub(r"\n{3,}", "\n\n", markdown_text)
+        return fix_text(markdown_text).strip()
 
     def _extract_images(self, soup: BeautifulSoup, base_url: str) -> list[str]:
         images: list[str] = []
