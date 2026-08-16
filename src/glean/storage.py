@@ -9,6 +9,12 @@ from .config import get_save_dir
 from .models import ScrapedData
 
 
+def _sanitize_name(name: str) -> str:
+    for char in '\\/:*?"<>|':
+        name = name.replace(char, "-")
+    return name.strip() or "scrape"
+
+
 class StorageManager:
     def __init__(self):
         self.save_dir = get_save_dir()
@@ -19,7 +25,7 @@ class StorageManager:
             name = f"scrape_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         if not name.endswith(".json"):
             name += ".json"
-        safe_name = Path(name).name
+        safe_name = Path(_sanitize_name(name)).name
         filepath = self.save_dir / safe_name
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
@@ -40,7 +46,7 @@ class StorageManager:
     def load(self, name: str) -> ScrapedData | None:
         if not name.endswith(".json"):
             name += ".json"
-        filepath = self.save_dir / Path(name).name
+        filepath = self.save_dir / Path(_sanitize_name(name)).name
         if not filepath.exists():
             return None
         try:
